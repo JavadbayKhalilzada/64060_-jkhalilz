@@ -1,0 +1,221 @@
+---
+title: "Assignment 2 ML"
+author: "Javadbay Khalilzada"
+date: "2023-02-20"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+#Uploading and recalling the required libraries
+#cleaning the environment
+
+```{r}
+rm(list = ls()) 
+library(readr)
+library(caret)
+library(knitr)
+library(class)
+library(ggplot2)
+library(dplyr)
+```
+
+
+#Import Data
+```{r}
+
+UniversalBank <- read.csv("UniversalBank.csv")
+
+head(UniversalBank)
+summary(UniversalBank)
+```
+
+#Cleaning and Preparation of the data
+#Delete ID and Zip.Code
+#Convert Personal_loan to factor
+#Creating Dummy Variables for Education
+
+```{r}
+
+UniversalBank1 <- UniversalBank [, c(2:4, 6:14)]
+t(t(names(UniversalBank1)))
+
+UniversalBank1$Personal.Loan =as.factor(UniversalBank1$Personal.Loan)
+class(UniversalBank1$Personal.Loan)
+
+
+Education1 <- ifelse(UniversalBank1$Education == 1, 1,0)
+Education1 <- as.factor(Education1)
+Education2 <- ifelse(UniversalBank1$Education == 2, 1,0)
+Education2 <- as.factor(Education2)
+Education3 <- ifelse(UniversalBank1$Education == 3, 1,0)
+Education3 <- as.factor(Education3)
+UniversalBank2 <- data.frame(UniversalBank1, Education1 = Education1, Education2 = Education2, Education3 = Education3)
+UniversalBank3 <- UniversalBank2[,-6]
+head(UniversalBank3)
+```
+
+
+
+#Partition data for test 60% and validation 40% and summary statistics
+```{r}
+Train_Index = createDataPartition(UniversalBank3$Personal.Loan,p=0.6, list = FALSE)
+Train_df = UniversalBank3[Train_Index,]
+Validation_df = UniversalBank3[-Train_Index,]
+nrow(Train_df)
+summary(Train_df)
+nrow(Validation_df)
+summary(Validation_df)
+
+```
+
+
+#Data normalization
+
+```{r}
+
+Norm_model <- preProcess(Train_df, method = c("center", "scale"))
+training_norm <- predict(Norm_model, Train_df)
+head(training_norm)
+validation_norm <- predict(Norm_model, Validation_df)
+head(validation_norm)
+
+```
+
+
+
+#Creating new test customer
+
+```{r}
+
+Test <- data.frame(Age=40,Experience=10,Income=84,Family=2,CCAvg=2,Mortgage=0,Securities.Account=0,CD.Account=0,Online=1,CreditCard=1,Education1=0,Education2=1,Education3=0)
+head(Test)
+test_norm <- predict(Norm_model, Test)
+head(test_norm)
+
+```
+
+
+
+#KNN in dataset
+
+```{r}
+
+Train_predictors <- training_norm[,-7]
+Train_label <- training_norm[,7]
+valid.predictors <- validation_norm[,-7]
+Valid_label <- validation_norm[,7]
+Predict_test_label <- knn(Train_predictors, test_norm, cl=Train_label, k=1)
+Predict_test_label
+
+#Output K = 0 so New.Customer will not accept the offer
+```
+
+
+#Customizing grid search and finding the best value using train function
+```{r}
+
+set.seed(234)
+searchGrid <- expand.grid(k=seq(1:30))
+model <- train(Personal.Loan~., training_norm, method="knn", tuneGrid = searchGrid)
+model
+best_k <- model$bestTune[[1]]
+
+#K gave the best output K=1
+
+```
+
+
+#Confusion matrix
+
+```{r}
+library(gmodels)
+Validation_data_best_k <- predict(model, validation_norm[,-7])
+confusionMatrix(Validation_data_best_k, Valid_label)
+CrossTable(Validation_data_best_k, Valid_label)
+
+```
+
+
+
+
+
+#Classifyin the customer
+
+```{r}
+Prediction_new <- knn(Train_predictors, test_norm, cl=Train_label, k=best_k)
+Prediction_new
+
+#K=0 the customer will not accept offer
+
+```
+
+
+#Repartition of the data into training=50%, validation=30%, and test=20% sets
+
+```{r}
+
+Test_Index_N = createDataPartition(UniversalBank3$Personal.Loan, p=0.2, list = FALSE) 
+Test_Data_N = UniversalBank3[Test_Index_N]
+TrainAndValid_Data = UniversalBank3[-Test_Index_N,]
+Train_Index_N = createDataPartition(TrainAndValid_Data$Personal.Loan, p=25/40, list=FALSE)
+Train_Data_N = TrainAndValid_Data[Train_Index_N,]
+Validation_Data_N = TrainAndValid_Data[-Train_Index_N,]
+nrow(Train_Data_N)
+summary(Train_Data_N)
+nrow(Validation_Data_N)
+summary(Validation_Data_N)
+nrow(Test_Data_N)
+summary(Test_Data_N)
+
+```
+
+
+
+#Normalizing Data sets
+
+```{r}
+Norm_model_N <- preProcess(Train_Data_N, method = c("center", "scale"))
+training_norm_N <- predict(Norm_model_N, Train_Data_N)
+head(training_norm_N)
+validation_norm_N <- predict(Norm_model_N, Validation_Data_N)
+head(validation_norm_N)
+Test_norm_N<-predict(Norm_model_N,UniversalBank3)
+head(Test_norm_N)
+
+```
+
+
+
+#Using the best K and clasifiying the customer for all 3 set
+```{r}
+
+
+Train_predictors_N <-training_norm_N[,-7]
+Train_label_N<-training_norm_N[,7]
+valid_predictors_N<-validation_norm_N[,-7]
+Valid_label_N<-validation_norm_N[,7]
+Test_predictors_N<-Test_norm_N[,-7]
+Test_label_N<-Test_norm_N[,7]
+training_prediction_N <-knn(Train_predictors_N,Train_predictors_N,cl=Train_label_N,k=best_k)
+head(training_prediction_N)
+validation_prediction_N <-knn(Train_predictors_N,valid_predictors_N,cl=Train_label_N,k=best_k)
+head(validation_prediction_N)
+Test_prediction_N <-knn(Train_predictors_N,Test_predictors_N,cl=Train_label_N,k=best_k)
+head(Test_prediction_N)
+
+```
+
+
+#Using Confusion matrix for all 3 training, validation, and test data sets 
+```{r}
+
+confusionMatrix(training_prediction_N, Train_label_N)
+CrossTable(training_prediction_N, Train_label_N)
+confusionMatrix(validation_prediction_N, Valid_label_N)
+CrossTable(validation_prediction_N, Valid_label_N)
+confusionMatrix(Test_prediction_N, Test_label_N)
+CrossTable(Test_prediction_N,Test_label_N)
+```
+
+#Overall the confusion matrix that were created for training, validation, and test sets show over 95% accuracy and 98% sensivity. However, on validation  it shows 58 sensivity that decreases the canche to predict output accurately. Overall, models have high accuracy that allow to predict the customer choices in a resonable portion. 
